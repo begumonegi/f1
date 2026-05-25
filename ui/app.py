@@ -4,6 +4,7 @@ from ui.pages.race import RacePage
 from ui.pages.practice import PracticePage
 from ui.pages.replay import ReplayPage
 from ui.pages.comparison import ComparisonPage
+from ui.pages.telemetry import TelemetryPage
 
 class App(ctk.CTk):
     def __init__(self):
@@ -39,6 +40,7 @@ class App(ctk.CTk):
             ("🏁  Race", "race"),
             ("🔧  Practice", "practice"),
             ("🔵  Comparison", "comparison"),
+            ("📡  Telemetry", "telemetry"),
             ("🎬  Replay", "replay"),
         ]
 
@@ -63,6 +65,7 @@ class App(ctk.CTk):
         self.pages["race"] = RacePage(self.content, self)
         self.pages["practice"] = PracticePage(self.content, self)
         self.pages["comparison"] = ComparisonPage(self.content, self)
+        self.pages["telemetry"] = TelemetryPage(self.content, self)
         self.pages["replay"] = ReplayPage(self.content, self)
 
         self.show_page("home")
