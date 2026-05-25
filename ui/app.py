@@ -3,6 +3,7 @@ from ui.pages.home import HomePage
 from ui.pages.race import RacePage
 from ui.pages.practice import PracticePage
 from ui.pages.replay import ReplayPage
+from ui.pages.comparison import ComparisonPage
 
 class App(ctk.CTk):
     def __init__(self):
@@ -37,6 +38,7 @@ class App(ctk.CTk):
             ("🏠  Home", "home"),
             ("🏁  Race", "race"),
             ("🔧  Practice", "practice"),
+            ("🔵  Comparison", "comparison"),
             ("🎬  Replay", "replay"),
         ]
 
@@ -60,6 +62,7 @@ class App(ctk.CTk):
         self.pages["home"] = HomePage(self.content, self)
         self.pages["race"] = RacePage(self.content, self)
         self.pages["practice"] = PracticePage(self.content, self)
+        self.pages["comparison"] = ComparisonPage(self.content, self)
         self.pages["replay"] = ReplayPage(self.content, self)
 
         self.show_page("home")
