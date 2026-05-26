@@ -1,3 +1,4 @@
+
 import customtkinter as ctk
 
 class HomePage(ctk.CTkFrame):
