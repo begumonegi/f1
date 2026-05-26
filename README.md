@@ -41,3 +41,12 @@ Or simply double-click `run.bat`
 ## Data Source
 
 All F1 data is powered by [FastF1](https://github.com/theOehrly/Fast-F1) and [Jolpica API](https://api.jolpi.ca).
+## Screenshots
+
+![Home](screenshots/home.png)
+![Race](screenshots/race.png)
+![Practice](screenshots/practice.png)
+![Comparison](screenshots/comparison.png)
+![Telemetry](screenshots/telemetry.png)
+![Standings](screenshots/standings.png)
+![Replay](screenshots/replay.png)
