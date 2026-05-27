@@ -43,6 +43,9 @@ with st.sidebar:
     st.markdown("---")
     st.caption("Powered by FastF1 & Jolpica API")
 
+import datetime
+CURRENT_YEAR = datetime.datetime.now().year
+
 RED = "#E10600"
 TEAL = "#27F4D2"
 DARK_BG = "#151515"
@@ -136,7 +139,7 @@ elif "🏁 Race" in page:
     st.title("🏁 Race Analysis")
 
     c1, c2, c3 = st.columns([1, 1, 2])
-    year = c1.number_input("Year", 2018, 2025, 2024, step=1)
+    year = c1.number_input("Year", 2018, CURRENT_YEAR, CURRENT_YEAR, step=1)
     round_num = c2.number_input("Round", 1, 24, 1, step=1)
 
     if c3.button("Load Race", use_container_width=True):
@@ -170,7 +173,7 @@ elif "🔧 Practice" in page:
     st.title("🔧 Practice Analysis")
 
     c1, c2, c3, c4 = st.columns([1, 1, 1, 2])
-    year = c1.number_input("Year", 2018, 2025, 2024, step=1)
+    year = c1.number_input("Year", 2018, CURRENT_YEAR, CURRENT_YEAR, step=1)
     round_num = c2.number_input("Round", 1, 24, 1, step=1)
     session_type = c3.selectbox("Session", ["FP1", "FP2", "FP3"])
 
@@ -217,7 +220,7 @@ elif "🔵 Comparison" in page:
     st.title("🔵 Driver Comparison")
 
     c1, c2, c3, c4, c5 = st.columns([1, 1, 1, 1, 1])
-    year = c1.number_input("Year", 2018, 2025, 2024, step=1)
+    year = c1.number_input("Year", 2018, CURRENT_YEAR, CURRENT_YEAR, step=1)
     round_num = c2.number_input("Round", 1, 24, 1, step=1)
     session_type = c3.selectbox("Session", ["R", "Q", "FP1", "FP2", "FP3"])
     driver1 = c4.text_input("Driver 1", "VER").upper()
@@ -286,7 +289,7 @@ elif "📡 Telemetry" in page:
     st.title("📡 Telemetry Analysis")
 
     c1, c2, c3, c4 = st.columns([1, 1, 1, 1])
-    year = c1.number_input("Year", 2018, 2025, 2024, step=1)
+    year = c1.number_input("Year", 2018, CURRENT_YEAR, CURRENT_YEAR, step=1)
     round_num = c2.number_input("Round", 1, 24, 1, step=1)
     session_type = c3.selectbox("Session", ["R", "Q", "FP1", "FP2", "FP3"])
     driver = c4.text_input("Driver", "VER").upper()
@@ -335,7 +338,7 @@ elif "🏆 Standings" in page:
     st.title("🏆 Season Standings")
 
     c1, c2 = st.columns([1, 3])
-    year = c1.number_input("Year", 2010, 2025, 2024, step=1)
+    year = c1.number_input("Year", 2010, CURRENT_YEAR, CURRENT_YEAR, step=1)
 
     if c2.button("Load Standings"):
         try:
@@ -382,7 +385,7 @@ elif "🎬 Replay" in page:
     )
 
     c1, c2, c3 = st.columns([1, 1, 2])
-    year = c1.number_input("Year", 2018, 2025, 2024, step=1)
+    year = c1.number_input("Year", 2018, CURRENT_YEAR, CURRENT_YEAR, step=1)
     round_num = c2.number_input("Round", 1, 24, 1, step=1)
 
     if c3.button("Load Track Map", use_container_width=True):
