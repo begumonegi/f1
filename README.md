@@ -1,6 +1,6 @@
 # 🏎️ F1 Dashboard
 
-[![Open in Streamlit](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://2aswbk4qvbuonyck6rhgpa.streamlit.app)
+[![Open in Streamlit](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://begum-f1-dashboard.streamlit.app)
 
 An interactive Formula 1 data analysis application — available as a **web app** and a desktop app.
 
@@ -15,7 +15,7 @@ An interactive Formula 1 data analysis application — available as a **web app*
 
 ## Live Demo
 
-🌐 **Web App:** https://2aswbk4qvbuonyck6rhgpa.streamlit.app
+🌐 **Web App:** https://begum-f1-dashboard.streamlit.app
 
 ## Tech Stack
 
