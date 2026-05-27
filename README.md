@@ -1,6 +1,8 @@
 # 🏎️ F1 Dashboard
 
-An interactive Formula 1 data analysis and race replay desktop application built with Python.
+[![Open in Streamlit](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://2aswbk4qvbuonyck6rhgpa.streamlit.app)
+
+An interactive Formula 1 data analysis application — available as a **web app** and a desktop app.
 
 ## Features
 
@@ -11,6 +13,10 @@ An interactive Formula 1 data analysis and race replay desktop application built
 - 🏆 **Season Standings** — Live driver and constructor standings + race calendar
 - 🎬 **Race Replay** — Interactive track animation with live driver positions, leaderboard and weather panel
 
+## Live Demo
+
+🌐 **Web App:** https://2aswbk4qvbuonyck6rhgpa.streamlit.app
+
 ## Tech Stack
 
 - **Python** — Core language
@@ -20,6 +26,7 @@ An interactive Formula 1 data analysis and race replay desktop application built
 - **Arcade** — Race replay visualization
 - **FastAPI** — REST API backend
 - **Jolpica API** — Live standings data
+- **Streamlit** — Web app interface
 
 ## Installation
 
