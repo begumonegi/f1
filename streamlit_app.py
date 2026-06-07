@@ -379,8 +379,11 @@ elif "📡 Telemetry" in page:
 elif "🏆 Standings" in page:
     st.title("🏆 Season Standings")
 
-    c1, c2 = st.columns([1, 3])
+    c1, c2, c3 = st.columns([1, 2, 2])
     year = c1.number_input("Year", 2010, CURRENT_YEAR, CURRENT_YEAR, step=1)
+    if c3.button("🔄 Force Refresh", help="Cache'i temizler ve veriyi yeniden çeker"):
+        fetch_standings.clear()
+        st.rerun()
 
     if c2.button("Load Standings"):
         try:
