@@ -98,18 +98,54 @@ def load_session(year: int, round_num: int, session_type: str):
     return sess
 
 
-@st.cache_data(show_spinner="Puan tablosu çekiliyor…")
+@st.cache_data(show_spinner="Puan tablosu hesaplanıyor…")
 def fetch_standings(year: int):
-    from requests.adapters import HTTPAdapter
-    from urllib3.util.retry import Retry
-    s = requests.Session()
-    s.mount("https://", HTTPAdapter(max_retries=Retry(total=3, backoff_factor=1)))
-    r1 = s.get(f"https://api.jolpi.ca/ergast/f1/{year}/driverStandings.json", timeout=30)
-    r2 = s.get(f"https://api.jolpi.ca/ergast/f1/{year}/constructorStandings.json", timeout=30)
-    schedule = fastf1.get_event_schedule(year)
-    driver_data = r1.json()["MRData"]["StandingsTable"]["StandingsLists"]
-    constructor_data = r2.json()["MRData"]["StandingsTable"]["StandingsLists"]
-    return driver_data, constructor_data, schedule
+    """
+    FastF1 session results kullanarak sezon sıralaması hesaplar.
+    Jolpica API'ye bağımlılık yok.
+    """
+    schedule = fastf1.get_event_schedule(year, include_testing=False)
+    now = pd.Timestamp.now(tz="UTC")
+    completed = schedule[schedule["Session5DateUtc"] < now].copy()
+    if completed.empty:
+        return pd.DataFrame(), pd.DataFrame(), schedule
+
+    # Puan sistemi
+    POINTS = {1:25, 2:18, 3:15, 4:12, 5:10, 6:8, 7:6, 8:4, 9:2, 10:1}
+    driver_pts: dict = {}
+    driver_team: dict = {}
+    constructor_pts: dict = {}
+
+    for _, event in completed.iterrows():
+        try:
+            sess = fastf1.get_session(year, int(event["RoundNumber"]), "R")
+            sess.load(laps=False, telemetry=False, weather=False, messages=False)
+            for _, row in sess.results.iterrows():
+                code = row.get("Abbreviation", "???")
+                name = row.get("FullName", code)
+                team = row.get("TeamName", "Unknown")
+                pos = int(row.get("Position", 99)) if not pd.isna(row.get("Position", float("nan"))) else 99
+                pts = float(row.get("Points", 0)) if not pd.isna(row.get("Points", float("nan"))) else 0
+                driver_pts[code] = driver_pts.get(code, 0) + pts
+                driver_team[code] = (name, team)
+                constructor_pts[team] = constructor_pts.get(team, 0) + pts
+        except Exception:
+            continue
+
+    # Driver standings DataFrame
+    drv_rows = []
+    for i, (code, pts) in enumerate(sorted(driver_pts.items(), key=lambda x: -x[1]), 1):
+        name, team = driver_team.get(code, (code, ""))
+        drv_rows.append({"Pos": f"P{i}", "Code": code, "Driver": name, "Team": team, "Pts": int(pts)})
+    driver_df = pd.DataFrame(drv_rows).set_index("Pos") if drv_rows else pd.DataFrame()
+
+    # Constructor standings DataFrame
+    con_rows = []
+    for i, (team, pts) in enumerate(sorted(constructor_pts.items(), key=lambda x: -x[1]), 1):
+        con_rows.append({"Pos": f"P{i}", "Team": team, "Pts": int(pts)})
+    constructor_df = pd.DataFrame(con_rows).set_index("Pos") if con_rows else pd.DataFrame()
+
+    return driver_df, constructor_df, schedule
 
 
 # ── HOME ──────────────────────────────────────────────────────────────────────
@@ -346,32 +382,21 @@ elif "🏆 Standings" in page:
 
     if c2.button("Load Standings"):
         try:
-            driver_data, constructor_data, schedule = fetch_standings(int(year))
+            driver_df, constructor_df, schedule = fetch_standings(int(year))
 
-            col1, col2 = st.columns(2)
-
-            with col1:
-                st.subheader("Driver Standings")
-                if driver_data:
-                    rows = []
-                    for s in driver_data[0]["DriverStandings"]:
-                        drv = s["Driver"]
-                        team = s["Constructors"][0]["name"] if s["Constructors"] else ""
-                        name = f"{drv['givenName']} {drv['familyName']}"
-                        code = drv.get("code", name[:3].upper())
-                        rows.append({"Pos": f"P{s['position']}", "Code": code, "Driver": name, "Team": team, "Pts": s["points"]})
-                    st.dataframe(pd.DataFrame(rows).set_index("Pos"), use_container_width=True)
-
-            with col2:
-                st.subheader("Constructor Standings")
-                if constructor_data:
-                    rows = []
-                    for s in constructor_data[0]["ConstructorStandings"]:
-                        rows.append({"Pos": f"P{s['position']}", "Team": s["Constructor"]["name"], "Pts": s["points"]})
-                    st.dataframe(pd.DataFrame(rows).set_index("Pos"), use_container_width=True)
+            if driver_df.empty:
+                st.warning("Bu yıl için henüz tamamlanmış yarış yok.")
+            else:
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.subheader("Driver Standings")
+                    st.dataframe(driver_df, use_container_width=True)
+                with col2:
+                    st.subheader("Constructor Standings")
+                    st.dataframe(constructor_df, use_container_width=True)
 
             st.subheader("📅 Race Calendar")
-            races = schedule[schedule["EventFormat"] != "testing"][["RoundNumber", "EventName", "EventDate", "Country"]].copy()
+            races = schedule[["RoundNumber", "EventName", "EventDate", "Country"]].copy()
             races["EventDate"] = races["EventDate"].astype(str).str[:10]
             races.columns = ["Round", "Event", "Date", "Country"]
             st.dataframe(races.set_index("Round"), use_container_width=True)
