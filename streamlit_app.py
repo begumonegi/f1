@@ -107,7 +107,7 @@ def fetch_standings(year: int):
     schedule = fastf1.get_event_schedule(year, include_testing=False)
     now = pd.Timestamp.now()
     date_col = "Session5Date" if "Session5Date" in schedule.columns else "EventDate"
-    col_vals = pd.to_datetime(schedule[date_col]).dt.tz_localize(None)
+    col_vals = pd.to_datetime(schedule[date_col], utc=True).dt.tz_convert(None)
     completed = schedule[col_vals < now].copy()
     if completed.empty:
         return pd.DataFrame(), pd.DataFrame(), schedule
