@@ -100,8 +100,12 @@ def load_session(year: int, round_num: int, session_type: str):
 
 @st.cache_data(show_spinner="Puan tablosu çekiliyor…")
 def fetch_standings(year: int):
-    r1 = requests.get(f"https://api.jolpi.ca/ergast/f1/{year}/driverStandings.json", timeout=10)
-    r2 = requests.get(f"https://api.jolpi.ca/ergast/f1/{year}/constructorStandings.json", timeout=10)
+    from requests.adapters import HTTPAdapter
+    from urllib3.util.retry import Retry
+    s = requests.Session()
+    s.mount("https://", HTTPAdapter(max_retries=Retry(total=3, backoff_factor=1)))
+    r1 = s.get(f"https://api.jolpi.ca/ergast/f1/{year}/driverStandings.json", timeout=30)
+    r2 = s.get(f"https://api.jolpi.ca/ergast/f1/{year}/constructorStandings.json", timeout=30)
     schedule = fastf1.get_event_schedule(year)
     driver_data = r1.json()["MRData"]["StandingsTable"]["StandingsLists"]
     constructor_data = r2.json()["MRData"]["StandingsTable"]["StandingsLists"]
