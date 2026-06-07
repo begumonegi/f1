@@ -98,7 +98,7 @@ def load_session(year: int, round_num: int, session_type: str):
     return sess
 
 
-@st.cache_data(show_spinner="Puan tablosu hesaplanıyor…")
+@st.cache_data(show_spinner="Puan tablosu hesaplanıyor…", ttl=3600)
 def fetch_standings(year: int):
     """
     FastF1 session results kullanarak sezon sıralaması hesaplar.
