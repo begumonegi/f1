@@ -118,21 +118,25 @@ def fetch_standings(year: int):
     driver_team: dict = {}
     constructor_pts: dict = {}
 
+    errors = []
+    loaded_rounds = []
     for _, event in completed.iterrows():
+        rnd = int(event["RoundNumber"])
+        name = event.get("EventName", f"Round {rnd}")
         try:
-            sess = fastf1.get_session(year, int(event["RoundNumber"]), "R")
+            sess = fastf1.get_session(year, rnd, "R")
             sess.load(laps=False, telemetry=False, weather=False, messages=False)
             for _, row in sess.results.iterrows():
                 code = row.get("Abbreviation", "???")
-                name = row.get("FullName", code)
+                drv_name = row.get("FullName", code)
                 team = row.get("TeamName", "Unknown")
-                pos = int(row.get("Position", 99)) if not pd.isna(row.get("Position", float("nan"))) else 99
                 pts = float(row.get("Points", 0)) if not pd.isna(row.get("Points", float("nan"))) else 0
                 driver_pts[code] = driver_pts.get(code, 0) + pts
-                driver_team[code] = (name, team)
+                driver_team[code] = (drv_name, team)
                 constructor_pts[team] = constructor_pts.get(team, 0) + pts
-        except Exception:
-            continue
+            loaded_rounds.append(f"R{rnd} {name}")
+        except Exception as e:
+            errors.append(f"R{rnd} {name}: {e}")
 
     # Driver standings DataFrame
     drv_rows = []
@@ -147,7 +151,7 @@ def fetch_standings(year: int):
         con_rows.append({"Pos": f"P{i}", "Team": team, "Pts": int(pts)})
     constructor_df = pd.DataFrame(con_rows).set_index("Pos") if con_rows else pd.DataFrame()
 
-    return driver_df, constructor_df, schedule
+    return driver_df, constructor_df, schedule, loaded_rounds, errors
 
 
 # ── HOME ──────────────────────────────────────────────────────────────────────
@@ -387,7 +391,14 @@ elif "🏆 Standings" in page:
 
     if c2.button("Load Standings"):
         try:
-            driver_df, constructor_df, schedule = fetch_standings(int(year))
+            driver_df, constructor_df, schedule, loaded_rounds, errors = fetch_standings(int(year))
+
+            if errors:
+                with st.expander(f"⚠️ {len(errors)} yarış yüklenemedi — detay"):
+                    for e in errors:
+                        st.text(e)
+            if loaded_rounds:
+                st.caption(f"✅ Yüklenen yarışlar ({len(loaded_rounds)}): {', '.join(loaded_rounds)}")
 
             if driver_df.empty:
                 st.warning("Bu yıl için henüz tamamlanmış yarış yok.")
