@@ -122,7 +122,7 @@ def fetch_standings(year: int):
     loaded_rounds = []
     for _, event in completed.iterrows():
         rnd = int(event["RoundNumber"])
-        name = event.get("EventName", f"Round {rnd}")
+        evt_name = event.get("EventName", f"Round {rnd}")
         try:
             sess = fastf1.get_session(year, rnd, "R")
             sess.load(laps=False, telemetry=False, weather=False, messages=False)
@@ -130,13 +130,18 @@ def fetch_standings(year: int):
                 code = row.get("Abbreviation", "???")
                 drv_name = row.get("FullName", code)
                 team = row.get("TeamName", "Unknown")
-                pts = float(row.get("Points", 0)) if not pd.isna(row.get("Points", float("nan"))) else 0
+                # Position tabanlı puan hesapla (FastF1'in Points kolonu güvenilmez olabilir)
+                try:
+                    pos = int(row["Position"])
+                except (ValueError, TypeError, KeyError):
+                    pos = 99
+                pts = POINTS.get(pos, 0)
                 driver_pts[code] = driver_pts.get(code, 0) + pts
                 driver_team[code] = (drv_name, team)
                 constructor_pts[team] = constructor_pts.get(team, 0) + pts
-            loaded_rounds.append(f"R{rnd} {name}")
+            loaded_rounds.append(f"R{rnd} {evt_name}")
         except Exception as e:
-            errors.append(f"R{rnd} {name}: {e}")
+            errors.append(f"R{rnd} {evt_name}: {e}")
 
     # Driver standings DataFrame
     drv_rows = []
@@ -387,6 +392,7 @@ elif "🏆 Standings" in page:
     year = c1.number_input("Year", 2010, CURRENT_YEAR, CURRENT_YEAR, step=1)
     if c3.button("🔄 Force Refresh", help="Cache'i temizler ve veriyi yeniden çeker"):
         fetch_standings.clear()
+        fastf1.Cache.clear_cache(cache_dir)
         st.rerun()
 
     if c2.button("Load Standings"):
