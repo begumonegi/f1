@@ -100,34 +100,52 @@ def load_session(year: int, round_num: int, session_type: str):
     return sess
 
 
-@st.cache_data(show_spinner="Puan tablosu çekiliyor…", ttl=3600)
+@st.cache_data(show_spinner="Puan tablosu hesaplanıyor…", ttl=3600)
 def fetch_standings(year: int):
-    def fetch_json(url):
-        encoded = urllib.parse.quote(url, safe="")
-        hdrs = {"User-Agent": "Mozilla/5.0"}
-        attempts = [
-            ("corsproxy",  f"https://corsproxy.io/?url={encoded}"),
-            ("allorigins", f"https://api.allorigins.win/get?url={encoded}"),
-            ("codetabs",   f"https://api.codetabs.com/v1/proxy?quest={url}"),
-            ("direct",     url),
-        ]
-        last_err = None
-        for mode, proxy_url in attempts:
-            try:
-                r = requests.get(proxy_url, timeout=20, headers=hdrs)
-                r.raise_for_status()
-                if mode == "allorigins":
-                    return json.loads(r.json()["contents"])
-                return r.json()
-            except Exception as e:
-                last_err = e
-        raise last_err or RuntimeError("Tüm proxy'ler başarısız oldu")
-
-    base = f"https://api.jolpi.ca/ergast/f1/{year}"
-    driver_data = fetch_json(f"{base}/driverStandings.json")
-    constructor_data = fetch_json(f"{base}/constructorStandings.json")
     schedule = fastf1.get_event_schedule(year, include_testing=False)
-    return driver_data, constructor_data, schedule
+    now = pd.Timestamp.now()
+    date_col = "Session5Date" if "Session5Date" in schedule.columns else "EventDate"
+    col_vals = pd.to_datetime(schedule[date_col], utc=True).dt.tz_convert(None)
+    completed = schedule[col_vals < now].copy()
+    if completed.empty:
+        return pd.DataFrame(), pd.DataFrame(), schedule
+
+    driver_pts: dict = {}
+    driver_team: dict = {}
+    constructor_pts: dict = {}
+
+    for _, event in completed.iterrows():
+        rnd = int(event["RoundNumber"])
+        for stype in ["R", "S"]:  # Race then Sprint (if weekend has one)
+            try:
+                sess = fastf1.get_session(year, rnd, stype)
+                sess.load(laps=False, telemetry=False, weather=False, messages=False)
+                for _, row in sess.results.iterrows():
+                    code = row.get("Abbreviation", "???")
+                    drv_name = row.get("FullName", code)
+                    team = row.get("TeamName", "Unknown")
+                    try:
+                        pts = float(row.get("Points", 0) or 0)
+                    except (ValueError, TypeError):
+                        pts = 0.0
+                    driver_pts[code] = driver_pts.get(code, 0) + pts
+                    driver_team[code] = (drv_name, team)
+                    constructor_pts[team] = constructor_pts.get(team, 0) + pts
+            except Exception:
+                pass  # Sprint session yok = sprint weekend değil
+
+    drv_rows = []
+    for i, (code, pts) in enumerate(sorted(driver_pts.items(), key=lambda x: -x[1]), 1):
+        name, team = driver_team.get(code, (code, ""))
+        drv_rows.append({"Pos": f"P{i}", "Code": code, "Driver": name, "Team": team, "Pts": int(pts)})
+    driver_df = pd.DataFrame(drv_rows).set_index("Pos") if drv_rows else pd.DataFrame()
+
+    con_rows = []
+    for i, (team, pts) in enumerate(sorted(constructor_pts.items(), key=lambda x: -x[1]), 1):
+        con_rows.append({"Pos": f"P{i}", "Team": team, "Pts": int(pts)})
+    constructor_df = pd.DataFrame(con_rows).set_index("Pos") if con_rows else pd.DataFrame()
+
+    return driver_df, constructor_df, schedule
 
 
 # ── HOME ──────────────────────────────────────────────────────────────────────
@@ -368,40 +386,11 @@ elif "🏆 Standings" in page:
 
     if c2.button("Load Standings"):
         try:
-            driver_data, constructor_data, schedule = fetch_standings(int(year))
+            driver_df, constructor_df, schedule = fetch_standings(int(year))
 
-            d_lists = driver_data["MRData"]["StandingsTable"]["StandingsLists"]
-            c_lists = constructor_data["MRData"]["StandingsTable"]["StandingsLists"]
-
-            if not d_lists:
+            if driver_df.empty:
                 st.warning("Bu yıl için henüz tamamlanmış yarış yok.")
             else:
-                d_standings = d_lists[0]["DriverStandings"]
-                drv_rows = [
-                    {
-                        "Pos": f"P{s['position']}",
-                        "Code": s["Driver"]["code"],
-                        "Driver": f"{s['Driver']['givenName']} {s['Driver']['familyName']}",
-                        "Team": s["Constructors"][0]["name"] if s["Constructors"] else "—",
-                        "Pts": int(float(s["points"])),
-                        "Wins": int(s["wins"]),
-                    }
-                    for s in d_standings
-                ]
-                driver_df = pd.DataFrame(drv_rows).set_index("Pos")
-
-                c_standings = c_lists[0]["ConstructorStandings"] if c_lists else []
-                con_rows = [
-                    {
-                        "Pos": f"P{s['position']}",
-                        "Team": s["Constructor"]["name"],
-                        "Pts": int(float(s["points"])),
-                        "Wins": int(s["wins"]),
-                    }
-                    for s in c_standings
-                ]
-                constructor_df = pd.DataFrame(con_rows).set_index("Pos")
-
                 col1, col2 = st.columns(2)
                 with col1:
                     st.subheader("Driver Standings")
