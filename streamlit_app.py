@@ -102,18 +102,30 @@ def load_session(year: int, round_num: int, session_type: str):
 
 @st.cache_data(show_spinner="Puan tablosu çekiliyor…", ttl=3600)
 def fetch_standings(year: int):
-    def via_proxy(url):
+    def fetch_json(url):
         encoded = urllib.parse.quote(url, safe="")
-        r = requests.get(
-            f"https://api.allorigins.win/get?url={encoded}",
-            timeout=20,
-        )
-        r.raise_for_status()
-        return json.loads(r.json()["contents"])
+        hdrs = {"User-Agent": "Mozilla/5.0"}
+        attempts = [
+            ("corsproxy",  f"https://corsproxy.io/?url={encoded}"),
+            ("allorigins", f"https://api.allorigins.win/get?url={encoded}"),
+            ("codetabs",   f"https://api.codetabs.com/v1/proxy?quest={url}"),
+            ("direct",     url),
+        ]
+        last_err = None
+        for mode, proxy_url in attempts:
+            try:
+                r = requests.get(proxy_url, timeout=20, headers=hdrs)
+                r.raise_for_status()
+                if mode == "allorigins":
+                    return json.loads(r.json()["contents"])
+                return r.json()
+            except Exception as e:
+                last_err = e
+        raise last_err or RuntimeError("Tüm proxy'ler başarısız oldu")
 
     base = f"https://api.jolpi.ca/ergast/f1/{year}"
-    driver_data = via_proxy(f"{base}/driverStandings.json")
-    constructor_data = via_proxy(f"{base}/constructorStandings.json")
+    driver_data = fetch_json(f"{base}/driverStandings.json")
+    constructor_data = fetch_json(f"{base}/constructorStandings.json")
     schedule = fastf1.get_event_schedule(year, include_testing=False)
     return driver_data, constructor_data, schedule
 
