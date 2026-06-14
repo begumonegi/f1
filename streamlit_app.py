@@ -1,4 +1,6 @@
 import os
+import json
+import urllib.parse
 import streamlit as st
 import matplotlib
 matplotlib.use("Agg")
@@ -98,65 +100,22 @@ def load_session(year: int, round_num: int, session_type: str):
     return sess
 
 
-@st.cache_data(show_spinner="Puan tablosu hesaplanıyor…", ttl=3600)
+@st.cache_data(show_spinner="Puan tablosu çekiliyor…", ttl=3600)
 def fetch_standings(year: int):
-    """
-    FastF1 session results kullanarak sezon sıralaması hesaplar.
-    Jolpica API'ye bağımlılık yok.
-    """
+    def via_proxy(url):
+        encoded = urllib.parse.quote(url, safe="")
+        r = requests.get(
+            f"https://api.allorigins.win/get?url={encoded}",
+            timeout=20,
+        )
+        r.raise_for_status()
+        return json.loads(r.json()["contents"])
+
+    base = f"https://api.jolpi.ca/ergast/f1/{year}"
+    driver_data = via_proxy(f"{base}/driverStandings.json")
+    constructor_data = via_proxy(f"{base}/constructorStandings.json")
     schedule = fastf1.get_event_schedule(year, include_testing=False)
-    now = pd.Timestamp.now()
-    date_col = "Session5Date" if "Session5Date" in schedule.columns else "EventDate"
-    col_vals = pd.to_datetime(schedule[date_col], utc=True).dt.tz_convert(None)
-    completed = schedule[col_vals < now].copy()
-    if completed.empty:
-        return pd.DataFrame(), pd.DataFrame(), schedule
-
-    # Puan sistemi
-    POINTS = {1:25, 2:18, 3:15, 4:12, 5:10, 6:8, 7:6, 8:4, 9:2, 10:1}
-    driver_pts: dict = {}
-    driver_team: dict = {}
-    constructor_pts: dict = {}
-
-    errors = []
-    loaded_rounds = []
-    for _, event in completed.iterrows():
-        rnd = int(event["RoundNumber"])
-        evt_name = event.get("EventName", f"Round {rnd}")
-        try:
-            sess = fastf1.get_session(year, rnd, "R")
-            sess.load(laps=False, telemetry=False, weather=False, messages=False)
-            for _, row in sess.results.iterrows():
-                code = row.get("Abbreviation", "???")
-                drv_name = row.get("FullName", code)
-                team = row.get("TeamName", "Unknown")
-                # Position tabanlı puan hesapla (FastF1'in Points kolonu güvenilmez olabilir)
-                try:
-                    pos = int(row["Position"])
-                except (ValueError, TypeError, KeyError):
-                    pos = 99
-                pts = POINTS.get(pos, 0)
-                driver_pts[code] = driver_pts.get(code, 0) + pts
-                driver_team[code] = (drv_name, team)
-                constructor_pts[team] = constructor_pts.get(team, 0) + pts
-            loaded_rounds.append(f"R{rnd} {evt_name}")
-        except Exception as e:
-            errors.append(f"R{rnd} {evt_name}: {e}")
-
-    # Driver standings DataFrame
-    drv_rows = []
-    for i, (code, pts) in enumerate(sorted(driver_pts.items(), key=lambda x: -x[1]), 1):
-        name, team = driver_team.get(code, (code, ""))
-        drv_rows.append({"Pos": f"P{i}", "Code": code, "Driver": name, "Team": team, "Pts": int(pts)})
-    driver_df = pd.DataFrame(drv_rows).set_index("Pos") if drv_rows else pd.DataFrame()
-
-    # Constructor standings DataFrame
-    con_rows = []
-    for i, (team, pts) in enumerate(sorted(constructor_pts.items(), key=lambda x: -x[1]), 1):
-        con_rows.append({"Pos": f"P{i}", "Team": team, "Pts": int(pts)})
-    constructor_df = pd.DataFrame(con_rows).set_index("Pos") if con_rows else pd.DataFrame()
-
-    return driver_df, constructor_df, schedule, loaded_rounds, errors
+    return driver_data, constructor_data, schedule
 
 
 # ── HOME ──────────────────────────────────────────────────────────────────────
@@ -397,18 +356,40 @@ elif "🏆 Standings" in page:
 
     if c2.button("Load Standings"):
         try:
-            driver_df, constructor_df, schedule, loaded_rounds, errors = fetch_standings(int(year))
+            driver_data, constructor_data, schedule = fetch_standings(int(year))
 
-            if errors:
-                with st.expander(f"⚠️ {len(errors)} yarış yüklenemedi — detay"):
-                    for e in errors:
-                        st.text(e)
-            if loaded_rounds:
-                st.caption(f"✅ Yüklenen yarışlar ({len(loaded_rounds)}): {', '.join(loaded_rounds)}")
+            d_lists = driver_data["MRData"]["StandingsTable"]["StandingsLists"]
+            c_lists = constructor_data["MRData"]["StandingsTable"]["StandingsLists"]
 
-            if driver_df.empty:
+            if not d_lists:
                 st.warning("Bu yıl için henüz tamamlanmış yarış yok.")
             else:
+                d_standings = d_lists[0]["DriverStandings"]
+                drv_rows = [
+                    {
+                        "Pos": f"P{s['position']}",
+                        "Code": s["Driver"]["code"],
+                        "Driver": f"{s['Driver']['givenName']} {s['Driver']['familyName']}",
+                        "Team": s["Constructors"][0]["name"] if s["Constructors"] else "—",
+                        "Pts": int(float(s["points"])),
+                        "Wins": int(s["wins"]),
+                    }
+                    for s in d_standings
+                ]
+                driver_df = pd.DataFrame(drv_rows).set_index("Pos")
+
+                c_standings = c_lists[0]["ConstructorStandings"] if c_lists else []
+                con_rows = [
+                    {
+                        "Pos": f"P{s['position']}",
+                        "Team": s["Constructor"]["name"],
+                        "Pts": int(float(s["points"])),
+                        "Wins": int(s["wins"]),
+                    }
+                    for s in c_standings
+                ]
+                constructor_df = pd.DataFrame(con_rows).set_index("Pos")
+
                 col1, col2 = st.columns(2)
                 with col1:
                     st.subheader("Driver Standings")
@@ -422,7 +403,6 @@ elif "🏆 Standings" in page:
             races["EventDate"] = races["EventDate"].astype(str).str[:10]
             races.columns = ["Round", "Event", "Date", "Country"]
             st.dataframe(races.set_index("Round"), use_container_width=True)
-
             st.success("✅ Standings loaded!")
         except Exception as e:
             st.error(f"❌ {e}")
