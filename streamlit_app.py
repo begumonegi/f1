@@ -1,6 +1,7 @@
 import os
 import json
 import urllib.parse
+from bs4 import BeautifulSoup
 import streamlit as st
 import matplotlib
 matplotlib.use("Agg")
@@ -100,9 +101,47 @@ def load_session(year: int, round_num: int, session_type: str):
     return sess
 
 
-@st.cache_data(show_spinner="Puan tablosu hesaplanıyor…", ttl=3600)
+@st.cache_data(show_spinner="Puan tablosu çekiliyor…", ttl=3600)
 def fetch_standings(year: int):
     schedule = fastf1.get_event_schedule(year, include_testing=False)
+    hdrs = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9",
+    }
+
+    def parse_f1_table(html, col_names):
+        soup = BeautifulSoup(html, "html.parser")
+        table = soup.find("table")
+        if not table:
+            return pd.DataFrame()
+        rows = []
+        for tr in table.find_all("tr")[1:]:
+            cells = [td.get_text(" ", strip=True) for td in tr.find_all("td")]
+            if len(cells) >= len(col_names):
+                rows.append(dict(zip(col_names, cells)))
+        return pd.DataFrame(rows)
+
+    # ── Try formula1.com (SSR pages, most accurate) ───────────────────
+    try:
+        r_d = requests.get(f"https://www.formula1.com/en/results/{year}/drivers",
+                           headers=hdrs, timeout=20)
+        r_c = requests.get(f"https://www.formula1.com/en/results/{year}/team",
+                           headers=hdrs, timeout=20)
+        r_d.raise_for_status()
+        r_c.raise_for_status()
+
+        drv_df = parse_f1_table(r_d.text, ["Pos", "Driver", "Nat", "Team", "Pts"])
+        con_df = parse_f1_table(r_c.text, ["Pos", "Team", "Pts"])
+
+        if not drv_df.empty and "Pts" in drv_df.columns:
+            drv_df["Pts"] = pd.to_numeric(drv_df["Pts"], errors="coerce").fillna(0).astype(int)
+            con_df["Pts"] = pd.to_numeric(con_df["Pts"], errors="coerce").fillna(0).astype(int)
+            return drv_df.set_index("Pos"), con_df.set_index("Pos") if not con_df.empty else pd.DataFrame(), schedule
+    except Exception:
+        pass
+
+    # ── Fallback: FastF1 Points column + sprint sessions ──────────────
     now = pd.Timestamp.now()
     date_col = "Session5Date" if "Session5Date" in schedule.columns else "EventDate"
     col_vals = pd.to_datetime(schedule[date_col], utc=True).dt.tz_convert(None)
@@ -116,7 +155,7 @@ def fetch_standings(year: int):
 
     for _, event in completed.iterrows():
         rnd = int(event["RoundNumber"])
-        for stype in ["R", "S"]:  # Race then Sprint (if weekend has one)
+        for stype in ["R", "S"]:
             try:
                 sess = fastf1.get_session(year, rnd, stype)
                 sess.load(laps=False, telemetry=False, weather=False, messages=False)
@@ -132,7 +171,7 @@ def fetch_standings(year: int):
                     driver_team[code] = (drv_name, team)
                     constructor_pts[team] = constructor_pts.get(team, 0) + pts
             except Exception:
-                pass  # Sprint session yok = sprint weekend değil
+                pass
 
     drv_rows = []
     for i, (code, pts) in enumerate(sorted(driver_pts.items(), key=lambda x: -x[1]), 1):
